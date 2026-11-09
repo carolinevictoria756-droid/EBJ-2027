@@ -1,0 +1,58 @@
+.site-footer {
+    background-color: #E8F1E9; /* Fundo verde mais claro e suave */
+    padding: 60px 20px;
+    font-family: 'Segoe UI', sans-serif;
+    border-top: 1px solid #D5E5D8;
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 colunas exatas lado a lado */
+    gap: 30px;
+    text-align: center; 
+}
+
+.footer-col h4 {
+    font-size: 15px;
+    font-weight: 800; /* Títulos bem destacados */
+    color: #1B4D2C; /* Verde escuro para contraste nos títulos */
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.footer-col p, .footer-col ul {
+    font-size: 14px;
+    color: #444;
+    line-height: 1.8;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.footer-col a {
+    color: #444;
+    text-decoration: none;
+    transition: color 0.3s ease;
+    font-weight: 500;
+}
+
+.footer-col a:hover {
+    color: #1B4D2C; /* Muda para verde escuro ao passar o mouse */
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 900px) {
+    .footer-container {
+        grid-template-columns: repeat(2, 1fr); /* 2 colunas em tablets */
+        gap: 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    .footer-container {
+        grid-template-columns: 1fr; /* 1 coluna no celular */
+    }
+}
