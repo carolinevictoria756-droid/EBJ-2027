@@ -6,6 +6,7 @@
 <title>Inscrição EBJ 2027</title>
 <link rel="icon" type="image/png" href="C:\Users\ohana\Downloads\EBJ 2027\logo cojadi.jpeg">
 <meta name="color-scheme" content="light">
+<script src="ebj-config.js"></script>
 <!-- Biblioteca de QR Code (versão fixa) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
@@ -165,8 +166,9 @@ footer{background:var(--brand);color:#fff;padding:30px 0 34px;margin-top:10px}
       <h1> Escola Biblíca de Jovens</h1>
     </div>
     <nav style="display:flex; gap:12px; align-items:center;">
-      <a href="#inscricao" class="on">Inscrição</a>
-    <a href="https://adisetoritapevi.com.br/ebom2022/usuarios">Portal do Administrador</a>
+      <a href="#inscricao" class="on" data-rota="inscricao">Inscrição</a>
+    <a href="#ingresso" data-rota="ingresso">Meu ingresso</a>
+      <a href="https://adisetoritapevi.com.br/ebom2022/usuarios">Portal do Administrador</a>
       
       <!-- Ícone do Instagram direto para o perfil -->
       <a href="https://www.instagram.com/cojadiitapevi?psln=MTZlMXhvYmI5eXZxOA==" target="_blank" title="Acesse nosso Instagram" style="display:flex; align-items:center; color:var(--on-brand); margin-left:8px;">
@@ -180,10 +182,6 @@ footer{background:var(--brand);color:#fff;padding:30px 0 34px;margin-top:10px}
   </div>
 </header>
 
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-<script>
-  emailjs.init("SUA_PUBLIC_KEY"); // Obtenha sua chave no painel do EmailJS
-</script>
 <main>
 
 <!-- =====================================================================
@@ -706,7 +704,7 @@ Salmos 119:9
       <label><input type="radio" name="forma" value="cartao"> Cartão</label>
       <label><input type="radio" name="forma" value="presencial"> Na secretaria</label>
     </div>
-    <p class="muted">Valor da inscrição: R$30,00 </p>
+    <p class="muted">Valor da inscrição: <strong id="valor">carregando…</strong></p>
     <button class="btn go" type="submit">Finalizar inscrição</button>
   </form>
 </section>
@@ -718,6 +716,30 @@ Salmos 119:9
   <!-- Cabeçalho no mesmo estilo da inscrição (o banner é replicado pelo script) -->
   <div class="hero" data-clone><h1>Meu ingresso</h1><p class="muted">Apresente o QR Code na entrada e acompanhe a situação do seu pagamento.</p></div>
   <div class="card ticket" id="ticket"></div>
+</section>
+
+<section id="v-admin" hidden>
+  <div class="hero"><h1>Painel <span>EBJ 2027</span></h1><p class="muted">Inscrições, pagamentos e check-in.</p></div>
+  <form class="card" id="admin-login" novalidate>
+    <h2>Acesso da equipe</h2>
+    <div class="grid"><div><label for="admin-email">E-mail</label><input id="admin-email" type="email" autocomplete="username" required></div>
+    <div><label for="admin-password">Senha</label><input id="admin-password" type="password" autocomplete="current-password" required></div></div>
+    <p class="err" id="admin-error" role="alert"></p><button class="btn" type="submit">Entrar</button>
+  </form>
+  <div id="admin-panel" hidden>
+    <div class="stats" id="stats"></div>
+    <div class="card"><div class="filters">
+      <input id="fb" placeholder="Buscar nome ou e-mail">
+      <select id="fi"><option value="">Todas as igrejas</option></select>
+      <select id="fs"><option value="">Todos os pagamentos</option><option value="approved">Pago</option><option value="pending">Pendente</option></select>
+    </div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn sm" type="button" id="admin-refresh">Atualizar lista</button>
+      <button class="btn sm alt" type="button" id="admin-csv">Exportar CSV</button>
+      <button class="btn sm alt" type="button" id="admin-logout">Sair</button>
+    </div><p class="err" id="admin-message" role="status"></p><div class="wrap">
+      <table><thead><tr><th>Nº</th><th>Participante</th><th>Igreja</th><th>Pagamento</th><th>Check-in</th><th>Ações</th></tr></thead><tbody id="linhas"></tbody></table>
+    </div><p id="vazio" class="muted" hidden>Nenhuma inscrição encontrada.</p></div>
+  </div>
 </section>
 
 <!-- =====================================================================
@@ -735,231 +757,185 @@ Salmos 119:9
 
 
 <script>
-/* =====================================================================
-   8. CONFIGURAÇÃO
-   Substitua os valores abaixo por chamadas à API Laravel do backend:
-     - IGREJAS          -> GET  /api/church
-     - VALOR_INSCRICAO  -> GET  /api/configures
-     - salvar inscrição -> POST /api/clients/preregister
-     - login admin      -> POST /api/users/login
-     - check-in         -> POST /api/checkin/new
-     - webhook de pagamento (gateway) -> POST /api/sales/webhook
-   ===================================================================== */
-const VALOR_INSCRICAO = 60;               // valor fictício em reais
-const ADMIN = { email: "admin@ebj.com", senha: "admin123" }; // apenas demonstração
-const IGREJAS = ["Alto do Paulista", "Amador Bueno", "Bela Vista Baixa", "Jardim Brasil","Jardim Brotinho","Jardim Julieta",
-"Jardim Jurema", "Jardim Novo Horizonte", "Jardim Paulista", "Jardim Portela", "Jardim Rosimeire", "Jardim Ruth", "Jardim São Carlos", "Jardim Vitapólis",
-"Monte Serrat", "Parque Boa Esperança", "Parque Itamarati", "Parque Suburbano", "São João Novo", "Vila Belmira", "Vila Eunice",
-"Vila Gióia", "Vila Godinho", "Vila dos Mineiros", "Vila Nova", "Vila Santa Rita I", "Vila Santa Rita II", "Vila Ypê", "Outro Ministério"];
+const API_BASE_URL = String(window.EBJ_CONFIG?.apiBaseUrl || "").replace(/\/$/, "");
+const API_TOKEN_KEY = "ebj2027:admin-token";
+const REGISTRATION_KEY = "ebj2027:registration";
+const money = value => Number(value || 0).toLocaleString("pt-BR", {style:"currency",currency:"BRL"});
+const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const phoneMask = value => { const d = value.replace(/\D/g, "").slice(0,11); return d.replace(/^(\d{2})(\d)/,"($1) $2").replace(/(\d{5})(\d{1,4})$/,"$1-$2"); };
+const apiOrigin = API_BASE_URL || (location.protocol === "file:" ? "" : location.origin);
+let adminToken = sessionStorage.getItem(API_TOKEN_KEY) || "";
+let churchList = [];
+let participantList = [];
+let currentRegistrationToken = sessionStorage.getItem(REGISTRATION_KEY) || "";
 
-/* =====================================================================
-   9. CAMADA DE DADOS (localStorage protegido por try/catch)
-   Cada registro: {id, nome, email, tel, igreja, lider, forma, valor,
-                   status: "pending"|"approved", checkin: ISO|null, criado}
-   ===================================================================== */
-const CHAVE = "ebj2027:participantes";
-let memoria = [];                          // reserva caso o storage esteja bloqueado
-const Dados = {
-  listar(){ try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch(e){ return memoria; } },
-  salvar(l){ memoria = l; try { localStorage.setItem(CHAVE, JSON.stringify(l)); } catch(e){} },
-  proximoId(){ return this.listar().reduce((m,p)=>Math.max(m,p.id),0) + 1; },
-  buscar(id){ return this.listar().find(p => p.id === id); },
-  atualizar(id, mudancas){
-    const l = this.listar(); const p = l.find(x => x.id === id);
-    if (p) Object.assign(p, mudancas); this.salvar(l);
-  }
-};
-function ultimoId(v){ try { if (v) localStorage.setItem("ebj2027:ultimo", v); return +localStorage.getItem("ebj2027:ultimo") || 0; } catch(e){ return 0; } }
-
-/* =====================================================================
-   10. UTILITÁRIOS
-   ===================================================================== */
-const $ = s => document.querySelector(s);
-const moeda = v => v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
-const esc = t => String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const mascaraTel = v => { // (11) 90000-0000
-  const d = v.replace(/\D/g,"").slice(0,11);
-  return d.replace(/^(\d{2})(\d)/,"($1) $2").replace(/(\d{5})(\d{1,4})$/,"$1-$2");
-};
-
-/* =====================================================================
-   11. ROTAS (troca de telas conforme o hash da URL)
-   ===================================================================== */
-function rotear(){
-  const rota = ["inscricao","ingresso","admin"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "inscricao";
-  ["inscricao","ingresso","admin"].forEach(r => $("#v-"+r).hidden = r !== rota);
-  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.rota === rota));
-  if (rota === "ingresso") desenharIngresso();
-  if (rota === "admin") desenharAdmin();
-  window.scrollTo(0,0);
-}
-window.addEventListener("hashchange", rotear);
-
-/* =====================================================================
-   12. TELA DE INSCRIÇÃO: preenchimento, validação e envio
-   ===================================================================== */
-$("#valor").textContent = moeda(VALOR_INSCRICAO);
-$("#igreja").innerHTML = '<option value="">Selecione…</option>' + IGREJAS.map(i => `<option>${esc(i)}</option>`).join("");
-$("#tel").addEventListener("input", e => e.target.value = mascaraTel(e.target.value));
-
-function validar(){
-  const erros = {};
-  if ($("#nome").value.trim().length < 3) erros.nome = "Informe seu nome completo.";
-  if (!/^\S+@\S+\.\S+$/.test($("#email").value.trim())) erros.email = "Informe um e-mail válido.";
-  if ($("#tel").value.replace(/\D/g,"").length < 10) erros.tel = "Informe um telefone válido.";
-  if (!$("#igreja").value) erros.igreja = "Selecione sua igreja.";
-  document.querySelectorAll("[data-e]").forEach(el => el.textContent = erros[el.dataset.e] || "");
-  return Object.keys(erros).length === 0;
+async function api(path, {method="GET", body, auth=true}={}) {
+  if (!apiOrigin) throw new Error("Configure o endereço da API em ebj-config.js para ativar inscrições e pagamentos.");
+  const headers = {"Accept":"application/json"};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (auth && adminToken) headers.Authorization = `Bearer ${adminToken}`;
+  const response = await fetch(`${apiOrigin}/api/${path}`, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
+  let data = {};
+  try { data = await response.json(); } catch (_) {}
+  if (!response.ok) throw new Error(data.message || "Não foi possível concluir a solicitação.");
+  return data;
 }
 
-$("#form").addEventListener("submit", e => {
-  e.preventDefault();
-  if (!validar()) return;
-  const id = Dados.proximoId();
-  const lista = Dados.listar();
-  lista.push({
-    id, nome: $("#nome").value.trim(), email: $("#email").value.trim(), tel: $("#tel").value,
-    igreja: $("#igreja").value, lider: $("#lider").value === "1",
-    forma: document.querySelector('[name="forma"]:checked').value,
-    valor: VALOR_INSCRICAO, status: "pending", checkin: null, criado: new Date().toISOString()
-  });
-  Dados.salvar(lista);
-  ultimoId(id);
-  e.target.reset();
-  location.hash = "#ingresso";
-});
+function showPage() {
+  const route = ["inscricao","ingresso"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "inscricao";
+  ["inscricao","ingresso","admin"].forEach(name => { const section = document.getElementById(`v-${name}`); if (section) section.hidden = name !== route; });
+  document.querySelectorAll("nav a[data-rota]").forEach(link => link.classList.toggle("on", link.dataset.rota === route));
+  if (route === "ingresso") renderTicket();
+  if (route === "admin") renderAdmin();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", showPage);
 
-/* =====================================================================
-   13. TELA DO INGRESSO: QR Code e pagamento simulado
-   O QR Code guarda apenas o número da inscrição (igual ao backend),
-   que o leitor do check-in usa para localizar o participante.
-   ===================================================================== */
-function desenharIngresso(){
-  const p = Dados.buscar(ultimoId());
-  const box = $("#ticket");
-  if (!p){ box.innerHTML = '<h2>Nenhuma inscrição</h2><p class="muted">Faça sua inscrição para gerar o ingresso.</p><a class="btn" href="#inscricao" style="text-decoration:none;display:inline-block">Inscrever-me</a>'; return; }
-  const pago = p.status === "approved";
-  const nomeForma = { pix:"PIX", cartao:"Cartão", presencial:"Pagamento na secretaria" }[p.forma];
-  let acao = "";
-  if (!pago && p.forma === "pix") acao = `<p class="muted">Copie o código PIX (demonstração):</p><div class="pix">00020126EBJ2027DEMO${String(p.id).padStart(6,"0")}5204000053039865802BR</div>`;
-  if (!pago && p.forma === "cartao") acao = '<p class="muted">Pagamento por cartão simulado nesta demonstração.</p>';
-  if (!pago && p.forma === "presencial") acao = '<p class="muted">Finalize o pagamento junto à secretaria da sua igreja.</p>';
-  box.innerHTML = `
-    <span class="tag ${pago ? "ok" : "pend"}">${pago ? "Pago" : "Aguardando pagamento"}</span>
-    <h2 style="margin-top:10px">${esc(p.nome)}</h2>
-    <p class="muted">${esc(p.igreja)} · inscrição nº ${p.id}</p>
-    <div id="qr"></div>
-    <p class="muted">Apresente este QR Code na entrada do evento.<br>${nomeForma} · ${moeda(p.valor)}</p>
-    ${acao}
-    ${!pago && p.forma !== "presencial" ? '<p><button class="btn go" id="pagar">Simular pagamento aprovado</button></p>' : ""}`;
-  new QRCode($("#qr"), { text: String(p.id), width: 190, height: 190 });
-  const bt = $("#pagar");
-  if (bt) bt.onclick = () => { Dados.atualizar(p.id, { status:"approved" }); desenharIngresso(); };
+function validateForm() {
+  const errors = {};
+  if (document.getElementById("nome").value.trim().length < 3) errors.nome = "Informe seu nome completo.";
+  if (!/^\S+@\S+\.\S+$/.test(document.getElementById("email").value.trim())) errors.email = "Informe um e-mail válido.";
+  if (document.getElementById("tel").value.replace(/\D/g, "").length < 10) errors.tel = "Informe um telefone válido.";
+  if (!document.getElementById("igreja").value) errors.igreja = "Selecione sua igreja.";
+  document.querySelectorAll("[data-e]").forEach(el => el.textContent = errors[el.dataset.e] || "");
+  return Object.keys(errors).length === 0;
 }
 
-/* =====================================================================
-   14. ADMINISTRAÇÃO: login, indicadores, filtros e ações
-   ===================================================================== */
-let logado = false;
-try { logado = sessionStorage.getItem("ebj2027:admin") === "1"; } catch(e){}
-
-$("#login").addEventListener("submit", e => {
-  e.preventDefault();
-  if ($("#lu").value === ADMIN.email && $("#lp").value === ADMIN.senha){
-    logado = true; try { sessionStorage.setItem("ebj2027:admin","1"); } catch(e){}
-    $("#lerr").textContent = ""; desenharAdmin();
-  } else $("#lerr").textContent = "Usuário ou senha incorretos.";
-});
-
-$("#fi").innerHTML = '<option value="">Todas as igrejas</option>' + IGREJAS.map(i => `<option>${esc(i)}</option>`).join("");
-["fb","fi","fs"].forEach(id => $("#"+id).addEventListener("input", desenharAdmin));
-
-// Aplica os filtros de busca, igreja e status de pagamento
-function filtrar(){
-  const b = $("#fb").value.toLowerCase(), i = $("#fi").value, s = $("#fs").value;
-  return Dados.listar().filter(p =>
-    (!b || (p.nome + p.email).toLowerCase().includes(b)) && (!i || p.igreja === i) && (!s || p.status === s));
-}
-
-function desenharAdmin(){
-  $("#login").hidden = logado; $("#painel").hidden = !logado;
-  if (!logado) return;
-  const todos = Dados.listar(), pagos = todos.filter(p => p.status === "approved");
-  $("#stats").innerHTML = [
-    ["Inscritos", todos.length], ["Pagos", pagos.length], ["Pendentes", todos.length - pagos.length],
-    ["Arrecadado", moeda(pagos.reduce((t,p) => t + p.valor, 0))], ["Presentes", todos.filter(p => p.checkin).length]
-  ].map(([k,v]) => `<div class="card stat"><span class="muted">${k}</span><b>${v}</b></div>`).join("");
-  const lista = filtrar();
-  $("#vazio").hidden = lista.length > 0;
-  $("#linhas").innerHTML = lista.map(p => `<tr>
-    <td>${p.id}</td><td>${esc(p.nome)}${p.lider ? " ★" : ""}<br><span class="muted">${esc(p.email)}</span></td>
-    <td>${esc(p.igreja)}</td>
-    <td><span class="tag ${p.status === "approved" ? "ok" : "pend"}">${p.status === "approved" ? "Pago" : "Pendente"}</span></td>
-    <td>${p.checkin ? new Date(p.checkin).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "—"}</td>
-    <td>${p.status !== "approved" ? `<button class="btn sm" data-acao="pagar" data-id="${p.id}">Aprovar</button>` : ""}
-        ${!p.checkin ? `<button class="btn sm go" data-acao="checkin" data-id="${p.id}">Check-in</button>` : ""}
-        <button class="btn sm alt" data-acao="excluir" data-id="${p.id}">Excluir</button></td></tr>`).join("");
-}
-
-// Ações dos botões do painel (delegação de eventos)
-$("#painel").addEventListener("click", async e => {
-  const bt = e.target.closest("[data-acao]"); if (!bt) return;
-  const id = +bt.dataset.id, a = bt.dataset.acao;
-  if (a === "pagar") Dados.atualizar(id, { status:"approved" });
-  if (a === "checkin") Dados.atualizar(id, { checkin:new Date().toISOString() });
-  if (a === "excluir") Dados.salvar(Dados.listar().filter(p => p.id !== id));
-  if (a === "sair"){ logado = false; try { sessionStorage.removeItem("ebj2027:admin"); } catch(x){} }
-  if (a === "seed") gerarExemplos();
-  if (a === "csv"){ // copia o relatório filtrado em CSV (com plano B manual)
-    const linhas = [["id","nome","email","telefone","igreja","lider","pagamento","forma","presenca"]].concat(
-      filtrar().map(p => [p.id,p.nome,p.email,p.tel,p.igreja,p.lider?"sim":"nao",p.status,p.forma,p.checkin||""]));
-    const csv = linhas.map(l => l.map(c => `"${String(c).replace(/"/g,'""')}"`).join(";")).join("\n");
-    const box = $("#csvbox"); box.value = csv; box.hidden = false;
-    try { await navigator.clipboard.writeText(csv); bt.textContent = "Copiado!"; } catch(x){ box.select(); }
-  }
-  desenharAdmin();
-});
-
-// Cria inscrições fictícias para testar filtros e relatórios
-function gerarExemplos(){
-  const nomes = ["Ana Souza","Bruno Lima","Carla Dias","Daniel Rocha","Eduarda Alves","Felipe Costa","Gabriela Nunes","Hugo Martins"];
-  const lista = Dados.listar(); let id = Dados.proximoId();
-  nomes.forEach((n,i) => lista.push({
-    id:id++, nome:n, email:n.split(" ")[0].toLowerCase()+"@exemplo.com", tel:"(11) 90000-000"+i,
-    igreja:IGREJAS[i % IGREJAS.length], lider:i === 0, forma:["pix","cartao","presencial"][i % 3],
-    valor:VALOR_INSCRICAO, status:i % 2 ? "pending" : "approved", checkin:null, criado:new Date().toISOString()
-  }));
-  Dados.salvar(lista);
-}
-
-/* =====================================================================
-   15. INICIALIZAÇÃO
-   ===================================================================== */
-// Replica o banner em destaque nas demais páginas (mesmo estilo da inscrição)
-document.querySelectorAll(".hero[data-clone]").forEach(h => h.prepend(document.querySelector(".spot").cloneNode(true)));
-rotear();
-</script>
-
-<script>
-document.getElementById("ID_DO_SEU_FORMULARIO").addEventListener("submit", function(event) {
-    event.preventDefault(); 
-    
-    // Captura os dados inseridos pelo participante
-    const templateParams = {
-        to_email: document.getElementById("email").value, 
-        nome_participante: document.getElementById("nome").value
+document.getElementById("tel").addEventListener("input", event => { event.target.value = phoneMask(event.target.value); });
+document.getElementById("form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!validateForm()) return;
+  const submit = event.currentTarget.querySelector('[type="submit"]');
+  submit.disabled = true;
+  const formOfPayment = document.querySelector('[name="forma"]:checked')?.value || "pix";
+  try {
+    const result = await api("clients/preregister", {method:"POST",auth:false,body:{
+      name_client:document.getElementById("nome").value.trim(),
+      email:document.getElementById("email").value.trim(),
+      phone:document.getElementById("tel").value,
+      id_church:Number(document.getElementById("igreja").value),
+      shepherd:["Pastor","Líder"].includes(document.getElementById("cargo").value) ? 1 : 0,
+      formOfpayment:formOfPayment === "presencial" ? "presencial" : "digital"
+    }});
+    const church = churchList.find(item => Number(item.id) === Number(document.getElementById("igreja").value));
+    const registration = {
+      id:result.client_data?.id,
+      name:result.client_data?.name_client || document.getElementById("nome").value.trim(),
+      church:church?.name_church || "",
+      value:document.getElementById("valor").textContent,
+      payment:formOfPayment,
+      checkoutUrl:result.preference_id ? "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=" + encodeURIComponent(result.preference_id) : ""
     };
-
-    // Dispara a confirmação para o endereço fornecido
-    emailjs.send("SEU_SERVICE_ID", "SEU_TEMPLATE_ID", templateParams)
-        .then(function(response) {
-            alert("Inscrição confirmada! Enviamos os detalhes para o seu e-mail.");
-            // Adicione a geração do QR Code ou redirecionamento aqui
-        }, function(error) {
-            alert("Não foi possível enviar o e-mail de confirmação. Verifique os dados.");
-        });
+    currentRegistrationToken = JSON.stringify(registration);
+    sessionStorage.setItem(REGISTRATION_KEY, currentRegistrationToken);
+    event.currentTarget.reset();
+    location.hash = "#ingresso";
+  } catch (error) {
+    alert(error.message);
+  } finally { submit.disabled = false; }
 });
+
+async function loadSiteOptions() {
+  const churchSelect = document.getElementById("igreja");
+  try {
+    const [churchResponse, configureResponse] = await Promise.all([api("church",{auth:false}),api("configures",{auth:false})]);
+    churchList = churchResponse.data || [];
+    churchSelect.innerHTML = '<option value="">Selecione sua igreja…</option>' + churchList.map(church => `<option value="${Number(church.id)}">${esc(church.name_church)}</option>`).join("");
+    document.getElementById("fi").innerHTML = '<option value="">Todas as igrejas</option>' + churchList.map(church => `<option value="${Number(church.id)}">${esc(church.name_church)}</option>`).join("");
+    document.getElementById("valor").textContent = money(configureResponse.configures?.value_sale);
+  } catch (error) {
+    churchSelect.innerHTML = '<option value="">Inscrições indisponíveis no momento</option>';
+    const value = document.getElementById("valor"); if (value) value.textContent = "indisponível";
+    console.error("EBJ API unavailable:", error.message);
+  }
+}
+
+function currentTokenFromUrl() {
+  return sessionStorage.getItem(REGISTRATION_KEY) || currentRegistrationToken;
+}
+async function renderTicket() {
+  const box = document.getElementById("ticket");
+  let registration;
+  try { registration = JSON.parse(currentTokenFromUrl() || "null"); } catch (_) { registration = null; }
+  if (!registration) {
+    box.innerHTML = '<h2>Nenhuma inscrição localizada</h2><p class="muted">Preencha o formulário para criar seu ingresso.</p><a class="btn" href="#inscricao">Fazer inscrição</a>';
+    return;
+  }
+  const paymentInfo = registration.payment === "presencial"
+    ? "Finalize o pagamento com a secretaria da sua igreja. A equipe confirmará a inscrição no Control Pass."
+    : registration.checkoutUrl
+      ? '<a class="btn go" href="' + esc(registration.checkoutUrl) + '" target="_blank" rel="noopener">Pagar com Mercado Pago</a><p class="muted">Após o pagamento, a confirmação será registrada no Control Pass.</p>'
+      : "A inscrição foi registrada. Consulte a equipe do evento para concluir o pagamento.";
+  box.innerHTML = '<span class="tag pend">Inscrição registrada</span><h2 style="margin-top:10px">' + esc(registration.name) + '</h2>' +
+    '<p class="muted">' + esc(registration.church) + (registration.id ? ' · inscrição nº ' + esc(registration.id) : '') + '</p>' +
+    '<p class="muted">Valor informado pela API: ' + esc(registration.value) + '</p><p>' + paymentInfo + '</p>' +
+    '<p class="muted">A confirmação e o controle dos participantes são feitos pela equipe no Control Pass.</p>';
+}
+
+function filteredParticipants() {
+  const search = document.getElementById("fb").value.toLowerCase();
+  const churchId = document.getElementById("fi").value;
+  const status = document.getElementById("fs").value;
+  return participantList.filter(p => (!search || `${p.name_client} ${p.email}`.toLowerCase().includes(search)) && (!churchId || String(p.id_church) === churchId) && (!status || p.status === status));
+}
+function drawAdmin() {
+  const paid = participantList.filter(p => p.status === "approved");
+  document.getElementById("stats").innerHTML = [["Inscritos",participantList.length],["Pagos",paid.length],["Pendentes",participantList.length-paid.length],["Arrecadado",money(paid.reduce((sum,p)=>sum+Number(p.value_sale||0),0))],["Presentes",participantList.filter(p=>p.last_checkin).length]].map(([key,value])=>`<div class="card stat"><span class="muted">${key}</span><b>${value}</b></div>`).join("");
+  const rows = filteredParticipants();
+  document.getElementById("vazio").hidden = rows.length > 0;
+  document.getElementById("linhas").innerHTML = rows.map(p => `<tr><td>${p.id}</td><td>${esc(p.name_client)}${p.shepherd ? " ★" : ""}<br><span class="muted">${esc(p.email)}</span></td><td>${esc(p.name_church)}</td><td><span class="tag ${p.status === "approved" ? "ok" : "pend"}">${p.status === "approved" ? "Pago" : "Pendente"}</span></td><td>${p.last_checkin ? new Date(p.last_checkin).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "—"}</td><td>${p.status !== "approved" && p.form_of_payment === "presencial" ? `<button class="btn sm" data-acao="pagar-presencial" data-id="${p.id}" data-sale="${p.sale_id}">Confirmar pagamento</button>` : ""}${p.status === "approved" && !p.last_checkin ? `<button class="btn sm go" data-acao="checkin" data-id="${p.id}">Check-in</button>` : ""}${p.status !== "approved" ? `<button class="btn sm alt" data-acao="excluir" data-id="${p.id}">Excluir</button>` : ""}</td></tr>`).join("");
+}
+async function loadAdmin() {
+  const data = await api("clients");
+  participantList = (data.clients || []).map(p => ({...p, status:p.paid_sale === "yes" ? "approved" : (p.status || "pending")}));
+  drawAdmin();
+}
+function renderAdmin() {
+  const loggedIn = Boolean(adminToken);
+  document.getElementById("admin-login").hidden = loggedIn;
+  document.getElementById("admin-panel").hidden = !loggedIn;
+  if (loggedIn) loadAdmin().catch(error => { document.getElementById("admin-message").textContent = error.message; });
+}
+document.getElementById("admin-login").addEventListener("submit", async event => {
+  event.preventDefault();
+  const errorBox = document.getElementById("admin-error"); errorBox.textContent = "";
+  try {
+    const data = await api("users/login",{method:"POST",auth:false,body:{email:document.getElementById("admin-email").value,password:document.getElementById("admin-password").value}});
+    adminToken = data.token; sessionStorage.setItem(API_TOKEN_KEY,adminToken); renderAdmin();
+  } catch (error) { errorBox.textContent = error.message; }
+});
+["fb","fi","fs"].forEach(id => document.getElementById(id).addEventListener("input",drawAdmin));
+document.getElementById("admin-refresh").addEventListener("click",()=>loadAdmin().catch(error=>document.getElementById("admin-message").textContent=error.message));
+document.getElementById("admin-logout").addEventListener("click",async()=>{try{await api("users/logout",{method:"POST"});}catch(_){} adminToken="";sessionStorage.removeItem(API_TOKEN_KEY);renderAdmin();});
+document.getElementById("admin-panel").addEventListener("click",async event=>{
+  const button=event.target.closest("[data-acao]"); if(!button)return;
+  const action=button.dataset.acao,id=button.dataset.id; button.disabled=true;
+  try {
+    if(action==="checkin") await api("checkin/new",{method:"POST",body:{id_clients:Number(id)}});
+    if(action==="pagar-presencial") await api(`sales/update/${button.dataset.sale}`,{method:"PUT",body:{paid_sale:"yes",status:"approved"}});
+    if(action==="excluir") await api(`clients/${id}`,{method:"DELETE"});
+    document.getElementById("admin-message").textContent="Atualizado.";
+    await loadAdmin();
+  } catch(error) { document.getElementById("admin-message").textContent=error.message; button.disabled=false; }
+});
+document.getElementById("admin-csv").addEventListener("click",async event=>{
+  const rows=[["id","nome","email","telefone","igreja","lider","pagamento","valor","check-in"],...filteredParticipants().map(p=>[p.id,p.name_client,p.email,p.phone,p.name_church,p.shepherd?"sim":"não",p.status,p.value_sale,p.last_checkin||""])];
+  const csv=rows.map(row=>row.map(cell=>`"${String(cell??"").replace(/"/g,'""')}"`).join(";")).join("\r\n");
+  await navigator.clipboard?.writeText(csv).catch(()=>{});
+  const link=document.createElement("a");link.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));link.download="inscricoes-ebj-2027.csv";link.click();URL.revokeObjectURL(link.href);
+});
+
+async function initialize() {
+  const query = new URLSearchParams(location.search);
+  currentTokenFromUrl();
+  await loadSiteOptions();
+  showPage();
+  if (query.has("registration")) location.hash = "#ingresso";
+}
+initialize();
 </script>
+
+
 
 <!-- Rodapé -->
 <!DOCTYPE html>
